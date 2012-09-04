@@ -40,6 +40,7 @@
 #include <Windows.h>
 #endif
 
+
 namespace picotest {
 
 /////////////////////////////////////////////////////////////////
@@ -61,6 +62,13 @@ namespace detail {
 	void setCurrentTestCase(TestCase* testcase);
 	void setCurrentTest(Test* test);
 	void coloredPrint(Color c, const char* fmt, ...);
+
+	template <typename Char, typename CharTraits, typename T>
+	::std::basic_ostream<Char, CharTraits>& operator<<(
+		::std::basic_ostream<Char, CharTraits>& os, const T& v) {
+		os << "(" << sizeof(v) << "-byte object)";
+		return os;
+	}
 }
 
 /////////////////////////////////////////////////////////////////
@@ -272,7 +280,7 @@ namespace detail {
 		if (!c) {
 			Test* current = getCurrentTest();
 			assert(current);
-			current->setFailure(file, line, cond, condStr(expected, result, op));
+			current->setFailure(file, line, cond, ::foo::condStr(expected, result, op));
 		}
 		return c;
 	}
@@ -313,12 +321,44 @@ namespace detail {
 		va_end(args);
 	}
 
-	template<typename T1, typename T2, typename OP>
-	std::string condStr(const T1& v1, const T2& v2, OP op){
-		std::ostringstream os;
-		os << v1 << " " << op.toStr() << " " << v2;
-		return os.str();
-	}
+	struct yes {};
+	struct no {};
+	
+	template<bool B>
+	struct is_true {
+		typedef yes type;
+	};
+
+	template<>
+	struct is_true<false>{
+		typedef no type;
+	};
+
+	template<typename T>
+	struct has_insertion_op {
+		typedef char yes;
+		typedef struct { char a[2]; } no;
+		template<typename U> static yes& test(U&);
+		template<typename U> static no& test(...);
+		static std::ostream& s;
+		static const T& t;
+		static const bool value = sizeof(test(s << t)) == sizeof(yes);
+	};
+
+	/*template<bool B, class T = void>
+	struct enable_if_c {
+		typedef T type;
+	};
+
+	template<class T>
+	struct enable_if_c<false, T> {};
+
+	template<typename Cond, class T = void>
+	struct enable_if : public enable_if_c<Cond::value, T> {};*/
+
+
+
+
 
 	// binary operators
 	struct LT {
@@ -381,6 +421,35 @@ namespace detail {
 
 } // namespace picotest
 
+namespace testing {
+
+class Test {
+public:
+	Test() {}
+	virtual ~Test() {}
+	void execute() {
+		SetUp();
+		test_method(); // template-method
+		TearDown();
+	}
+protected:
+	virtual void SetUp() {}
+	virtual void TearDown() {}
+	virtual void test_method() = 0;
+};
+
+} // namespace testing
+
+namespace foo {
+	template<typename T1, typename T2, typename OP>
+	std::string condStr(const T1& v1, const T2& v2, OP op){
+		std::ostringstream os;
+		using namespace ::picotest::detail;
+
+		os << v1 << " " << op.toStr() << " " << v2;
+		return os.str();
+	}
+}
 
 /////////////////////////////////////////////////////////////////
 // helper macros
@@ -388,37 +457,46 @@ namespace detail {
 #define PICOTEST_JOIN(X, Y)       PICOTEST_DO_JOIN( X, Y )
 #define PICOTEST_DO_JOIN( X, Y )  PICOTEST_DO_JOIN2(X,Y)
 #define PICOTEST_DO_JOIN2( X, Y ) X##Y
-#define STRINGNIZE(X) #X
+#define PICOTEST_STR(X) #X
 
 #define PICOTEST_IDENITY(test_case_name, test_name) PICOTEST_JOIN(test_case_name, test_name)
 #define PICOTEST_TEST_CASE_INVOKER(test_case_name, test_name) PICOTEST_JOIN(PICOTEST_IDENITY(test_case_name, test_name), _invoker)
 #define PICOTEST_TEST_CASE_REGISTRAR(test_case_name, test_name) static picotest::Registrar PICOTEST_JOIN(PICOTEST_IDENITY(test_case_name, test_name), _registrar)
+#define PICOTEST_MAKE_TEST(test_case_name, test_name) picotest::Test(PICOTEST_STR(test_name), PICOTEST_TEST_CASE_INVOKER(test_case_name, test_name))
 
 /////////////////////////////////////////////////////////////////
 // test with auto-registration
 
-#define TEST(test_case_name, test_name)                          \
-struct PICOTEST_IDENITY(test_case_name, test_name) {             \
-	void test_method();                                          \
-};                                                               \
-	                                                             \
-void PICOTEST_TEST_CASE_INVOKER(test_case_name, test_name)() {   \
-    PICOTEST_IDENITY(test_case_name, test_name) t;               \
-    t.test_method();                                             \
-}                                                                \
-                                                                 \
-PICOTEST_TEST_CASE_REGISTRAR(test_case_name, test_name)(         \
-	STRINGNIZE(test_case_name),                                  \
-	picotest::Test(STRINGNIZE(test_name), PICOTEST_TEST_CASE_INVOKER(test_case_name, test_name)));\
-                                                                 \
+#define TEST(test_case_name, test_name) \
+PICOTEST_TEST_CASE_AUTO_REGISTER(test_case_name, test_name, ::testing::Test)
+
+
+#define TEST_F(test_fixture, test_name) \
+PICOTEST_TEST_CASE_AUTO_REGISTER(test_fixture, test_name, test_fixture)
+
+
+#define PICOTEST_TEST_CASE_AUTO_REGISTER(test_case_name, test_name, base_t) \
+struct PICOTEST_IDENITY(test_case_name, test_name) : public base_t {        \
+	void test_method();                                                     \
+};                                                                          \
+	                                                                        \
+void PICOTEST_TEST_CASE_INVOKER(test_case_name, test_name)() {              \
+    PICOTEST_IDENITY(test_case_name, test_name) t;                          \
+	t.execute();                                                            \
+}                                                                           \
+                                                                            \
+PICOTEST_TEST_CASE_REGISTRAR(test_case_name, test_name)(                    \
+	PICOTEST_STR(test_case_name),                                           \
+	PICOTEST_MAKE_TEST(test_case_name, test_name));                         \
+	                                                                        \
 void PICOTEST_IDENITY(test_case_name, test_name)::test_method()
 
 
 /////////////////////////////////////////////////////////////////
 // EXPECT_XX
 
-#define EXPECT_BOOL(expected, actual) picotest::detail::assertBool(expected, actual, picotest::detail::condStr(#expected, #actual, picotest::detail::EQ()), __FILE__, __LINE__)
-#define EXPECT_BINARY(left, right, OP) picotest::detail::assertBinary(left, right, PICOTEST_JOIN(picotest::detail::, OP()), picotest::detail::condStr(#left, #right, picotest::detail::OP()), __FILE__, __LINE__)
+#define EXPECT_BOOL(expected, actual) picotest::detail::assertBool(expected, actual, foo::condStr(#expected, #actual, picotest::detail::EQ()), __FILE__, __LINE__)
+#define EXPECT_BINARY(left, right, OP) picotest::detail::assertBinary(left, right, PICOTEST_JOIN(picotest::detail::, OP()), foo::condStr(#left, #right, picotest::detail::OP()), __FILE__, __LINE__)
 
 #define EXPECT_TRUE(cond) EXPECT_BOOL(true, cond)
 #define EXPECT_FALSE(cond) EXPECT_BOOL(false, cond)
