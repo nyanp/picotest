@@ -41,6 +41,20 @@
 #endif
 
 
+namespace picotest_detail {
+	template<typename T>
+	std::string toString(const T& v) {
+		std::ostringstream os;
+		using namespace ::picotest::detail;
+		os << v;
+		return os.str();
+	}
+
+	inline std::string toString(bool b) {
+		return b ? "true" : "false";
+	}
+}
+
 namespace picotest {
 
 /////////////////////////////////////////////////////////////////
@@ -243,19 +257,6 @@ namespace detail {
 		}
 		static std::string name() { return "!="; }
 	};
-
-	template<typename T1, typename T2, typename OP>
-	bool assertImpl(const T1& expected, const T2& actual, OP op, const char* expected_str, const char* actual_str, const char* file, int line) {
-		bool c = op(expected, actual);
-
-		if (!c) {
-			Test* current = TestState::getCurrentTest();
-			current->setFailure(file, line,
-				makeExpressionStr(expected_str, actual_str, op),
-				makeExpressionStr(expected, actual, op));		
-		}
-		return c;
-	}
 }
 
 /////////////////////////////////////////////////////////////////
@@ -292,6 +293,9 @@ struct Failure {
 	Failure(const std::string& file, int line, const std::string& expected, const std::string& actual)
 		: file(file), line(line), message(expected + " failed for: " + actual) {}
 
+	Failure(const std::string& file, int line, const std::string& expression, bool expected)
+		: file(file), line(line), message("(" + expression + ") == " + picotest_detail::toString(expected) + " failed for: (" + expression + ") == " + picotest_detail::toString(!expected)) {}
+
 	Failure() {}
 	std::string file;
 	int line;
@@ -320,6 +324,10 @@ public:
 
 	void setFailure(const std::string& file, int line, const std::string& expected, const std::string& result) {
 		failures_.push_back(Failure(file, line, expected, result));
+	}
+
+	void setFailure(const std::string& file, int line, const std::string& expression, bool expected) {
+		failures_.push_back(Failure(file, line, expression, expected));
 	}
 
 	void reportFailure(std::ostream& os) const {
@@ -449,6 +457,33 @@ struct Registrar {
 	}
 };
 
+
+template<typename T1, typename T2, typename OP>
+bool compare(const T1& expected, const T2& actual, OP op, const char* expected_str, const char* actual_str, const char* file, int line) {
+	bool test_success = op(expected, actual);
+
+	if (!test_success) {
+		Test* current = TestState::getCurrentTest();
+		current->setFailure(file, line,
+			makeExpressionStr(expected_str, actual_str, op),
+			makeExpressionStr(expected, actual, op));		
+	}
+	return test_success;
+}
+
+inline bool evaluate(bool expected, bool actual, const char* expression, const char* file, int line) {
+	bool test_success = expected == actual;
+
+	if (!test_success) {
+		Test* current = TestState::getCurrentTest();
+		current->setFailure(file, line,
+			expression,
+			expected);	
+	}
+
+	return test_success;
+}
+
 } // namespace picotest
 
 namespace testing {
@@ -470,19 +505,6 @@ protected:
 
 } // namespace testing
 
-namespace picotest_detail {
-	template<typename T>
-	std::string toString(const T& v) {
-		std::ostringstream os;
-		using namespace ::picotest::detail;
-		os << v;
-		return os.str();
-	}
-
-	inline std::string toString(bool b) {
-		return b ? "true" : "false";
-	}
-}
 
 /////////////////////////////////////////////////////////////////
 // helper macros
@@ -528,10 +550,10 @@ void PICOTEST_IDENITY(test_case_name, test_name)::test_method()
 /////////////////////////////////////////////////////////////////
 // EXPECT_XX
 
-#define EXPECT_BOOL(expected, actual) \
-	picotest::detail::assertImpl(expected, actual, picotest::detail::EQ(), #expected, #actual, __FILE__, __LINE__)
+#define EXPECT_BOOL(expected, expression) \
+	picotest::evaluate(expected, expression, #expression, __FILE__, __LINE__)
 #define EXPECT_BINARY(left, right, OP) \
-	picotest::detail::assertImpl(left, right, PICOTEST_JOIN(picotest::detail::, OP()), #left, #right, __FILE__, __LINE__)
+	picotest::compare(left, right, PICOTEST_JOIN(picotest::detail::, OP()), #left, #right, __FILE__, __LINE__)
 
 #define EXPECT_TRUE(cond) EXPECT_BOOL(true, cond)
 #define EXPECT_FALSE(cond) EXPECT_BOOL(false, cond)
@@ -553,9 +575,9 @@ void PICOTEST_IDENITY(test_case_name, test_name)::test_method()
 /////////////////////////////////////////////////////////////////
 // ASSERT_XX
 
-#define ASSERT_BOOL(expected, actual) \
+#define ASSERT_BOOL(expected, expression) \
 do {\
-	if (!EXPECT_BOOL(expected, actual)){\
+	if (!EXPECT_BOOL(expected, expression)){\
 		return;\
 	}\
 } while(0)
