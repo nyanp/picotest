@@ -105,7 +105,7 @@ namespace detail {
 	// operator <<
 	template <typename Char, typename CharTraits>
 	::std::basic_ostream<Char, CharTraits>& operator<<(
-		::std::basic_ostream<Char, CharTraits>& os, bool b) {
+		::std::basic_ostream<Char, CharTraits>& os, const bool& b) {
 			os << b ? "true" : "false";
 			return os;
 	}
@@ -152,6 +152,12 @@ namespace detail {
 			return distance(v1_.raw, v2_.raw) <= MIN_UPS;
 		}
 	};
+
+	template<typename T1, typename T2, typename OP>
+	std::string makeExpressionStr(const T1& v1, const T2& v2, OP op){
+		return ::picotest_detail::toString(v1) + " " + op.name() + " " + ::picotest_detail::toString(v2);
+	}
+
 
 	// binary operators
 	struct LT {
@@ -237,6 +243,19 @@ namespace detail {
 		}
 		static std::string name() { return "!="; }
 	};
+
+	template<typename T1, typename T2, typename OP>
+	bool assertImpl(const T1& expected, const T2& actual, OP op, const char* expected_str, const char* actual_str, const char* file, int line) {
+		bool c = op(expected, actual);
+
+		if (!c) {
+			Test* current = TestState::getCurrentTest();
+			current->setFailure(file, line,
+				makeExpressionStr(expected_str, actual_str, op),
+				makeExpressionStr(expected, actual, op));		
+		}
+		return c;
+	}
 }
 
 /////////////////////////////////////////////////////////////////
@@ -271,7 +290,7 @@ struct TestState {
 
 struct Failure {
 	Failure(const std::string& file, int line, const std::string& expected, const std::string& actual)
-		: file(file), line(line), message("Expected:" + expected + ", Actual:" + actual) {}
+		: file(file), line(line), message(expected + " failed for: " + actual) {}
 
 	Failure() {}
 	std::string file;
@@ -309,7 +328,7 @@ public:
 	}
 private:
 	void report(std::ostream& os, const Failure& f) const {
-		os << name_ << " : " << f.file << "(" << f.line << "): error: " << f.message << std::endl;
+		os << name_ << " : " << f.file << "(" << f.line << "): " << f.message << std::endl;
 	}
 
 	bool executed_;
@@ -430,23 +449,6 @@ struct Registrar {
 	}
 };
 
-namespace detail {
-
-	template<typename T1, typename T2, typename OP>
-	bool assertImpl(const T1& expected, const T2& actual, OP op, const char* expected_str, const char* actual_str, const char* file, int line) {
-		bool c = op(expected, actual);
-
-		if (!c) {
-			Test* current = TestState::getCurrentTest();
-			current->setFailure(file, line,
-				::picotest_detail::makeExpressionStr(expected_str, actual_str, op),
-				::picotest_detail::makeExpressionStr(expected, actual, op));		
-		}
-		return c;
-	}
-
-} // namespace detail
-
 } // namespace picotest
 
 namespace testing {
@@ -469,15 +471,17 @@ protected:
 } // namespace testing
 
 namespace picotest_detail {
-	template<typename T1, typename T2, typename OP>
-	std::string makeExpressionStr(const T1& v1, const T2& v2, OP op){
+	template<typename T>
+	std::string toString(const T& v) {
 		std::ostringstream os;
 		using namespace ::picotest::detail;
-
-		os << v1 << " " << op.name() << " " << v2;
+		os << v;
 		return os.str();
 	}
 
+	inline std::string toString(bool b) {
+		return b ? "true" : "false";
+	}
 }
 
 /////////////////////////////////////////////////////////////////
