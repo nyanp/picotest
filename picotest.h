@@ -60,7 +60,7 @@ namespace detail {
 	};
 
 #ifdef PICOTEST_WINDOWS
-	WORD getColorAttr(Color c) {
+	inline WORD getColorAttr(Color c) {
 		switch (c) {
 		case COLOR_RED:    return FOREGROUND_RED;
 		case COLOR_GREEN:  return FOREGROUND_GREEN;
@@ -69,7 +69,7 @@ namespace detail {
 	}
 #endif
 
-	void coloredPrint(Color c, const char* fmt, ...) {
+	inline void coloredPrint(Color c, const char* fmt, ...) {
 		va_list args;
 		va_start(args, fmt);
 
@@ -99,6 +99,14 @@ namespace detail {
 	::std::basic_ostream<Char, CharTraits>& operator<<(
 		::std::basic_ostream<Char, CharTraits>& os, const T& v) {
 			os << "(" << sizeof(v) << "-byte object)";
+			return os;
+	}
+
+	// operator <<
+	template <typename Char, typename CharTraits>
+	::std::basic_ostream<Char, CharTraits>& operator<<(
+		::std::basic_ostream<Char, CharTraits>& os, bool b) {
+			os << b ? "true" : "false";
 			return os;
 	}
 
@@ -148,74 +156,86 @@ namespace detail {
 	// binary operators
 	struct LT {
 		template <class T1, class T2>
-		bool operator()(const T1& v1, const T2& v2) { return v1 < v2; }
-		static std::string toStr() { return "<"; }
+		bool operator()(const T1& lhs, const T2& rhs) { return lhs < rhs; }
+		static std::string name() { return "<"; }
 	};
 
 	struct GT {
 		template <class T1, class T2>
-		bool operator()(const T1& v1, const T2& v2) { return v1 > v2; }
-		static std::string toStr() { return ">"; }
+		bool operator()(const T1& lhs, const T2& rhs) { return lhs > rhs; }
+		static std::string name() { return ">"; }
 	};
 
 	struct LE {
 		template <class T1, class T2>
-		bool operator()(const T1& v1, const T2& v2) { return v1 <= v2; }
-		static std::string toStr() { return "<="; }
+		bool operator()(const T1& lhs, const T2& rhs) { return lhs <= rhs; }
+		static std::string name() { return "<="; }
 	};
 
 	struct GE {
 		template <class T1, class T2>
-		bool operator()(const T1& v1, const T2& v2) { return v1 >= v2; }
-		static std::string toStr() { return ">="; }
+		bool operator()(const T1& lhs, const T2& rhs) { return lhs >= rhs; }
+		static std::string name() { return ">="; }
 	};
 
 	struct EQ {
 		template <class T1, class T2>
-		bool operator()(const T1& v1, const T2& v2) { return v1 == v2; }
-		static std::string toStr() { return "=="; }
+		bool operator()(const T1& lhs, const T2& rhs) { return lhs == rhs; }
+
+		// use when comparing against null
+		template <class T>
+		bool operator()(int n, T* const v) {
+			return reinterpret_cast<const int*>(n) == v;
+		}
+
+		template <class T>
+		bool operator()(T* const v, int n) {
+			return v == reinterpret_cast<const int*>(n);
+		}
+
+		static std::string name() { return "=="; }
 	};
 
 	struct NE {
 		template <class T1, class T2>
-		bool operator()(const T1& v1, const T2& v2) { return v1 == v2; }
-		static std::string toStr() { return "!="; }
+		bool operator()(const T1& lhs, const T2& rhs) { return !EQ()(lhs, rhs); }//lhs == rhs; }
+		static std::string name() { return "!="; }
 	};
 
 	struct STREQ {
-		bool operator()(const char* v1, const char* v2) { return strcmp(v1, v2) == 0; }
-		static std::string toStr() { return "=="; }
+		bool operator()(const char* lhs, const char* rhs) { return strcmp(lhs, rhs) == 0; }
+		static std::string name() { return "=="; }
 	};
 
 	struct STRNE {
-		bool operator()(const char* v1, const char* v2) { return strcmp(v1, v2) != 0; }
-		static std::string toStr() { return "!="; }
+		bool operator()(const char* lhs, const char* rhs) { return strcmp(lhs, rhs) != 0; }
+		static std::string name() { return "!="; }
 	};
 
 	struct STRCASEEQ {
-		bool operator()(const char* v1, const char* v2) { return _stricmp(v1, v2) == 0; }
-		static std::string toStr() { return "=="; }
+		bool operator()(const char* lhs, const char* rhs) { return _stricmp(lhs, rhs) == 0; }
+		static std::string name() { return "=="; }
 	};
 
 	struct STRCASENE {
-		bool operator()(const char* v1, const char* v2) { return _stricmp(v1, v2) != 0; }
-		static std::string toStr() { return "!="; }
+		bool operator()(const char* lhs, const char* rhs) { return _stricmp(lhs, rhs) != 0; }
+		static std::string name() { return "!="; }
 	};
 
 	struct FLOATEQ {
 		template<typename T>
-		bool operator()(const T& v1, const T& v2) {
-			return Floating::almostEqual(v1, v2);
+		bool operator()(const T& lhs, const T& rhs) {
+			return Floating::almostEqual(lhs, rhs);
 		}
-		static std::string toStr() { return "=="; }
+		static std::string name() { return "=="; }
 	};
 
 	struct FLOATNE {
 		template<typename T>
-		bool operator()(const T& v1, const T& v2) {	
-			return !FLOATEQ()(v1, v2);
+		bool operator()(const T& lhs, const T& rhs) {	
+			return !FLOATEQ()(lhs, rhs);
 		}
-		static std::string toStr() { return "!="; }
+		static std::string name() { return "!="; }
 	};
 }
 
@@ -412,24 +432,15 @@ struct Registrar {
 
 namespace detail {
 
-	bool assertBool(bool expected, bool result, const std::string& cond, const std::string& file, int line) {
-		if (expected != result) {
-			Test* current = TestState::getCurrentTest();
-			assert(current);
-			current->setFailure(file, line, cond, result ? "true" : "false");
-		}
-		return expected == result;
-	}
-
 	template<typename T1, typename T2, typename OP>
-	bool assertBinary(const T1& expected, const T2& result, OP op, const std::string& cond, const std::string& file, int line) {
-
-		bool c = op(expected, result);
+	bool assertImpl(const T1& expected, const T2& actual, OP op, const char* expected_str, const char* actual_str, const char* file, int line) {
+		bool c = op(expected, actual);
 
 		if (!c) {
 			Test* current = TestState::getCurrentTest();
-			assert(current);
-			current->setFailure(file, line, cond, ::picotest_detail::condStr(expected, result, op));
+			current->setFailure(file, line,
+				::picotest_detail::makeExpressionStr(expected_str, actual_str, op),
+				::picotest_detail::makeExpressionStr(expected, actual, op));		
 		}
 		return c;
 	}
@@ -459,13 +470,14 @@ protected:
 
 namespace picotest_detail {
 	template<typename T1, typename T2, typename OP>
-	std::string condStr(const T1& v1, const T2& v2, OP op){
+	std::string makeExpressionStr(const T1& v1, const T2& v2, OP op){
 		std::ostringstream os;
 		using namespace ::picotest::detail;
 
-		os << v1 << " " << op.toStr() << " " << v2;
+		os << v1 << " " << op.name() << " " << v2;
 		return os.str();
 	}
+
 }
 
 /////////////////////////////////////////////////////////////////
@@ -513,13 +525,14 @@ void PICOTEST_IDENITY(test_case_name, test_name)::test_method()
 // EXPECT_XX
 
 #define EXPECT_BOOL(expected, actual) \
-	picotest::detail::assertBool(expected, actual, picotest_detail::condStr(#expected, #actual, picotest::detail::EQ()), __FILE__, __LINE__)
+	picotest::detail::assertImpl(expected, actual, picotest::detail::EQ(), #expected, #actual, __FILE__, __LINE__)
 #define EXPECT_BINARY(left, right, OP) \
-	picotest::detail::assertBinary(left, right, PICOTEST_JOIN(picotest::detail::, OP()), picotest_detail::condStr(#left, #right, picotest::detail::OP()), __FILE__, __LINE__)
+	picotest::detail::assertImpl(left, right, PICOTEST_JOIN(picotest::detail::, OP()), #left, #right, __FILE__, __LINE__)
 
 #define EXPECT_TRUE(cond) EXPECT_BOOL(true, cond)
 #define EXPECT_FALSE(cond) EXPECT_BOOL(false, cond)
 #define EXPECT_EQ(expected, actual) EXPECT_BINARY(expected, actual, EQ)
+#define EXPECT_NE(expected, actual) EXPECT_BINARY(expected, actual, NE)
 #define EXPECT_LT(expected, actual) EXPECT_BINARY(expected, actual, LT)
 #define EXPECT_GT(expected, actual) EXPECT_BINARY(expected, actual, GT)
 #define EXPECT_LE(expected, actual) EXPECT_BINARY(expected, actual, LE)
@@ -553,6 +566,7 @@ do {\
 #define ASSERT_TRUE(cond) ASSERT_BOOL(true, cond)
 #define ASSERT_FALSE(cond) ASSERT_BOOL(false, cond)
 #define ASSERT_EQ(expected, actual) ASSERT_BINARY(expected, actual, EQ)
+#define ASSERT_NE(expected, actual) ASSERT_BINARY(expected, actual, NE)
 #define ASSERT_LT(expected, actual) ASSERT_BINARY(expected, actual, LT)
 #define ASSERT_GT(expected, actual) ASSERT_BINARY(expected, actual, GT)
 #define ASSERT_LE(expected, actual) ASSERT_BINARY(expected, actual, LE)
