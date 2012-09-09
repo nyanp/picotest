@@ -30,14 +30,20 @@
 #include <iostream>
 #include <string>
 #include <map>
-#include <cassert>
 #include <sstream>
 #include <algorithm>
-#include <cstdint>
 
-#if defined _WIN32
+#include <cstdio>
+#include <cassert>
+#include <stdint.h>
+#include <cstdarg>
+#include <cstring>
+
+#if defined _WIN32 
 #define PICOTEST_WINDOWS
 #include <Windows.h>
+#elif defined __linux__
+#define PICOTEST_LINUX
 #endif
 
 
@@ -188,6 +194,15 @@ namespace detail {
 		}
 	};
 
+	/***** stricmp/strcasecmp *****/
+	inline int stricmp(const char* c1, const char* c2) {
+#ifdef PICOTEST_WINDOWS
+		return _stricmp(c1, c2);
+#else
+		return strcasecmp(c1, c2);
+#endif
+	}
+
 	/***** binary operators *****/
 
 	struct LT {
@@ -249,12 +264,17 @@ namespace detail {
 	};
 
 	struct STRCASEEQ {
-		bool operator()(const char* lhs, const char* rhs) { return _stricmp(lhs, rhs) == 0; }
+		bool operator()(const char* lhs, const char* rhs) { 
+			return stricmp(lhs, rhs) == 0; 
+		}
 		static std::string name() { return "=="; }
 	};
 
 	struct STRCASENE {
-		bool operator()(const char* lhs, const char* rhs) { return _stricmp(lhs, rhs) != 0; }
+		bool operator()(const char* lhs, const char* rhs) { 
+			return stricmp(lhs, rhs) != 0; 
+		
+		}
 		static std::string name() { return "!="; }
 	};
 
@@ -567,24 +587,24 @@ void PICOTEST_IDENITY(test_case_name, test_name)::test_method()
 #define EXPECT_BOOL(expected, expression) \
 	picotest::evaluate(expected, expression, #expression, __FILE__, __LINE__)
 #define EXPECT_BINARY(lhs, rhs, OP) \
-	picotest::compare(lhs, rhs, PICOTEST_JOIN(picotest::detail::, OP()), #lhs, #rhs, __FILE__, __LINE__)
+	picotest::compare(lhs, rhs, OP(), #lhs, #rhs, __FILE__, __LINE__)
 
 #define EXPECT_TRUE(cond) EXPECT_BOOL(true, cond)
 #define EXPECT_FALSE(cond) EXPECT_BOOL(false, cond)
-#define EXPECT_EQ(expected, actual) EXPECT_BINARY(expected, actual, EQ)
-#define EXPECT_NE(expected, actual) EXPECT_BINARY(expected, actual, NE)
-#define EXPECT_LT(expected, actual) EXPECT_BINARY(expected, actual, LT)
-#define EXPECT_GT(expected, actual) EXPECT_BINARY(expected, actual, GT)
-#define EXPECT_LE(expected, actual) EXPECT_BINARY(expected, actual, LE)
-#define EXPECT_GE(expected, actual) EXPECT_BINARY(expected, actual, GE)
-#define EXPECT_STREQ(expected_str, actual_str) EXPECT_BINARY(expected_str, actual_str, STREQ)
-#define EXPECT_STRNE(expected_str, actual_str) EXPECT_BINARY(expected_str, actual_str, STRNE)
-#define EXPECT_STRCASEEQ(expected_str, actual_str) EXPECT_BINARY(expected_str, actual_str, STRCASEEQ)
-#define EXPECT_STRCASENE(expected_str, actual_str) EXPECT_BINARY(expected_str, actual_str, STRCASENE)
-#define EXPECT_FLOAT_EQ(expected, actual)  EXPECT_BINARY(expected, actual, FLOATEQ)
-#define EXPECT_DOUBLE_EQ(expected, actual) EXPECT_BINARY(expected, actual, FLOATEQ)
-#define EXPECT_FLOAT_NE(expected, actual)  EXPECT_BINARY(expected, actual, FLOATNE)
-#define EXPECT_DOUBLE_NE(expected, actual) EXPECT_BINARY(expected, actual, FLOATNE)
+#define EXPECT_EQ(expected, actual) EXPECT_BINARY(expected, actual, picotest::detail::EQ)
+#define EXPECT_NE(expected, actual) EXPECT_BINARY(expected, actual, picotest::detail::NE)
+#define EXPECT_LT(expected, actual) EXPECT_BINARY(expected, actual, picotest::detail::LT)
+#define EXPECT_GT(expected, actual) EXPECT_BINARY(expected, actual, picotest::detail::GT)
+#define EXPECT_LE(expected, actual) EXPECT_BINARY(expected, actual, picotest::detail::LE)
+#define EXPECT_GE(expected, actual) EXPECT_BINARY(expected, actual, picotest::detail::GE)
+#define EXPECT_STREQ(expected_str, actual_str) EXPECT_BINARY(expected_str, actual_str, picotest::detail::STREQ)
+#define EXPECT_STRNE(expected_str, actual_str) EXPECT_BINARY(expected_str, actual_str, picotest::detail::STRNE)
+#define EXPECT_STRCASEEQ(expected_str, actual_str) EXPECT_BINARY(expected_str, actual_str, picotest::detail::STRCASEEQ)
+#define EXPECT_STRCASENE(expected_str, actual_str) EXPECT_BINARY(expected_str, actual_str, picotest::detail::STRCASENE)
+#define EXPECT_FLOAT_EQ(expected, actual)  EXPECT_BINARY(expected, actual, picotest::detail::FLOATEQ)
+#define EXPECT_DOUBLE_EQ(expected, actual) EXPECT_BINARY(expected, actual, picotest::detail::FLOATEQ)
+#define EXPECT_FLOAT_NE(expected, actual)  EXPECT_BINARY(expected, actual, picotest::detail::FLOATNE)
+#define EXPECT_DOUBLE_NE(expected, actual) EXPECT_BINARY(expected, actual, picotest::detail::FLOATNE)
 
 /////////////////////////////////////////////////////////////////
 // ASSERT_XX
@@ -605,20 +625,20 @@ do {\
 
 #define ASSERT_TRUE(cond) ASSERT_BOOL(true, cond)
 #define ASSERT_FALSE(cond) ASSERT_BOOL(false, cond)
-#define ASSERT_EQ(expected, actual) ASSERT_BINARY(expected, actual, EQ)
-#define ASSERT_NE(expected, actual) ASSERT_BINARY(expected, actual, NE)
-#define ASSERT_LT(expected, actual) ASSERT_BINARY(expected, actual, LT)
-#define ASSERT_GT(expected, actual) ASSERT_BINARY(expected, actual, GT)
-#define ASSERT_LE(expected, actual) ASSERT_BINARY(expected, actual, LE)
-#define ASSERT_GE(expected, actual) ASSERT_BINARY(expected, actual, GE)
-#define ASSERT_STREQ(expected_str, actual_str) ASSERT_BINARY(expected_str, actual_str, STREQ)
-#define ASSERT_STRNE(expected_str, actual_str) ASSERT_BINARY(expected_str, actual_str, STRNE)
-#define ASSERT_STRCASEEQ(expected_str, actual_str) ASSERT_BINARY(expected_str, actual_str, STRCASEEQ)
-#define ASSERT_STRCASENE(expected_str, actual_str) ASSERT_BINARY(expected_str, actual_str, STRCASENE)
-#define ASSERT_FLOAT_EQ(expected, actual)  ASSERT_BINARY(expected, actual, FLOATEQ)
-#define ASSERT_DOUBLE_EQ(expected, actual) ASSERT_BINARY(expected, actual, FLOATEQ)
-#define ASSERT_FLOAT_NE(expected, actual)  ASSERT_BINARY(expected, actual, FLOATNE)
-#define ASSERT_DOUBLE_NE(expected, actual) ASSERT_BINARY(expected, actual, FLOATNE)
+#define ASSERT_EQ(expected, actual) ASSERT_BINARY(expected, actual, picotest::detail::EQ)
+#define ASSERT_NE(expected, actual) ASSERT_BINARY(expected, actual, picotest::detail::NE)
+#define ASSERT_LT(expected, actual) ASSERT_BINARY(expected, actual, picotest::detail::LT)
+#define ASSERT_GT(expected, actual) ASSERT_BINARY(expected, actual, picotest::detail::GT)
+#define ASSERT_LE(expected, actual) ASSERT_BINARY(expected, actual, picotest::detail::LE)
+#define ASSERT_GE(expected, actual) ASSERT_BINARY(expected, actual, picotest::detail::GE)
+#define ASSERT_STREQ(expected_str, actual_str) ASSERT_BINARY(expected_str, actual_str, picotest::detail::STREQ)
+#define ASSERT_STRNE(expected_str, actual_str) ASSERT_BINARY(expected_str, actual_str, picotest::detail::STRNE)
+#define ASSERT_STRCASEEQ(expected_str, actual_str) ASSERT_BINARY(expected_str, actual_str, picotest::detail::STRCASEEQ)
+#define ASSERT_STRCASENE(expected_str, actual_str) ASSERT_BINARY(expected_str, actual_str, picotest::detail::STRCASENE)
+#define ASSERT_FLOAT_EQ(expected, actual)  ASSERT_BINARY(expected, actual, picotest::detail::FLOATEQ)
+#define ASSERT_DOUBLE_EQ(expected, actual) ASSERT_BINARY(expected, actual, picotest::detail::FLOATEQ)
+#define ASSERT_FLOAT_NE(expected, actual)  ASSERT_BINARY(expected, actual, picotest::detail::FLOATNE)
+#define ASSERT_DOUBLE_NE(expected, actual) ASSERT_BINARY(expected, actual, picotest::detail::FLOATNE)
 
 /////////////////////////////////////////////////////////////////
 // RUNNING ALL TESTS
