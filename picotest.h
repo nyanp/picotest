@@ -33,41 +33,32 @@
 #include <cassert>
 #include <sstream>
 #include <algorithm>
-#include <stdint.h>
-// workaround
+#include <cstdint>
+
 #if defined _WIN32
 #define PICOTEST_WINDOWS
 #include <Windows.h>
 #endif
 
 
-namespace picotest_detail {
-	template<typename T>
-	std::string toString(const T& v) {
-		std::ostringstream os;
-		using namespace ::picotest::detail;
-		os << v;
-		return os.str();
-	}
+/////////////////////////////////////////////////////////////////
+// helper macros
 
-	inline std::string toString(bool b) {
-		return b ? "true" : "false";
-	}
-}
-
-namespace picotest {
+#define PICOTEST_JOIN(X, Y)       PICOTEST_DO_JOIN( X, Y )
+#define PICOTEST_DO_JOIN( X, Y )  PICOTEST_DO_JOIN2(X,Y)
+#define PICOTEST_DO_JOIN2( X, Y ) X##Y
+#define PICOTEST_STR(X) #X
+#define PICOTEST_DISALLOW_COPY_AND_ASSIGN(typeName) \
+void operator = (const typeName&);\
+typeName(const typeName&)
 
 /////////////////////////////////////////////////////////////////
-// forward decralations
+// internal
 
-class  TestCase;
-class  Test;
-struct TestState;
-struct Registry;
-struct Registrar;
-
+namespace picotest {
 namespace detail {
-	// print with color
+	/***** print with color *****/
+
 	enum Color {
 		COLOR_RED,
 		COLOR_GREEN
@@ -108,6 +99,8 @@ namespace detail {
 		va_end(args);
 	}
 
+	/***** stringize *****/
+
 	// fallback operator <<
 	template <typename Char, typename CharTraits, typename T>
 	::std::basic_ostream<Char, CharTraits>& operator<<(
@@ -116,7 +109,7 @@ namespace detail {
 			return os;
 	}
 
-	// operator <<
+	// operator << for bool
 	template <typename Char, typename CharTraits>
 	::std::basic_ostream<Char, CharTraits>& operator<<(
 		::std::basic_ostream<Char, CharTraits>& os, const bool& b) {
@@ -124,7 +117,35 @@ namespace detail {
 			return os;
 	}
 
-	// compare floating number using ULP
+	template<typename T>
+	std::string toString(const T& v) {
+		std::ostringstream os;
+		using namespace ::picotest::detail;
+		os << v;
+		return os.str();
+	}
+
+	inline std::string toString(bool b) {
+		return b ? "true" : "false";
+	}
+
+	template<typename T1, typename T2, typename OP>
+	std::string makeExpressionStr(const T1& v1, const T2& v2, OP op) {
+		return toString(v1) + " " + op.name() + " " + toString(v2);
+	}
+
+	/***** error message *****/
+	inline std::string makeMessage(const std::string& expected, const std::string& actual) {
+		return expected + " failed for: " + actual;
+	}
+
+	inline std::string makeMessage(const std::string& expression, bool expected) {
+		return "(" + expression + ") == " + toString(expected) + 
+			" failed for: (" + expression + ") == " + toString(!expected);
+	}
+
+	/***** comparing floating point numbers using ULP *****/
+
 	struct Floating {
 		static const size_t MIN_UPS = 4;
 
@@ -167,50 +188,45 @@ namespace detail {
 		}
 	};
 
-	template<typename T1, typename T2, typename OP>
-	std::string makeExpressionStr(const T1& v1, const T2& v2, OP op){
-		return ::picotest_detail::toString(v1) + " " + op.name() + " " + ::picotest_detail::toString(v2);
-	}
+	/***** binary operators *****/
 
-
-	// binary operators
 	struct LT {
-		template <class T1, class T2>
+		template <typename T1, typename T2>
 		bool operator()(const T1& lhs, const T2& rhs) { return lhs < rhs; }
 		static std::string name() { return "<"; }
 	};
 
 	struct GT {
-		template <class T1, class T2>
+		template <typename T1, typename T2>
 		bool operator()(const T1& lhs, const T2& rhs) { return lhs > rhs; }
 		static std::string name() { return ">"; }
 	};
 
 	struct LE {
-		template <class T1, class T2>
+		template <typename T1, typename T2>
 		bool operator()(const T1& lhs, const T2& rhs) { return lhs <= rhs; }
 		static std::string name() { return "<="; }
 	};
 
 	struct GE {
-		template <class T1, class T2>
+		template <typename T1, typename T2>
 		bool operator()(const T1& lhs, const T2& rhs) { return lhs >= rhs; }
 		static std::string name() { return ">="; }
 	};
 
 	struct EQ {
-		template <class T1, class T2>
+		template <typename T1, typename T2>
 		bool operator()(const T1& lhs, const T2& rhs) { return lhs == rhs; }
 
 		// use when comparing against null
-		template <class T>
-		bool operator()(int n, T* const v) {
-			return reinterpret_cast<const int*>(n) == v;
+		template <typename T>
+		bool operator()(int lhs, T* const rhs) {
+			return reinterpret_cast<const int*>(lhs) == rhs;
 		}
 
-		template <class T>
-		bool operator()(T* const v, int n) {
-			return v == reinterpret_cast<const int*>(n);
+		template <typename T>
+		bool operator()(T* const lhs, int rhs) {
+			return lhs == reinterpret_cast<const int*>(rhs);
 		}
 
 		static std::string name() { return "=="; }
@@ -260,6 +276,12 @@ namespace detail {
 }
 
 /////////////////////////////////////////////////////////////////
+// framework
+
+namespace framework {
+
+class  TestCase;
+class  Test;
 
 struct TestState {
 	TestState() : testcase_(0), test_(0) {}
@@ -284,6 +306,8 @@ struct TestState {
 	static void setCurrentTest(Test* test) {
 		getInstance().test_ = test;
 	}
+private:
+	PICOTEST_DISALLOW_COPY_AND_ASSIGN(TestState);
 
 	TestCase* testcase_;
 	Test* test_;
@@ -291,10 +315,10 @@ struct TestState {
 
 struct Failure {
 	Failure(const std::string& file, int line, const std::string& expected, const std::string& actual)
-		: file(file), line(line), message(expected + " failed for: " + actual) {}
+		: file(file), line(line), message(detail::makeMessage(expected, actual)) {}
 
 	Failure(const std::string& file, int line, const std::string& expression, bool expected)
-		: file(file), line(line), message("(" + expression + ") == " + picotest_detail::toString(expected) + " failed for: (" + expression + ") == " + picotest_detail::toString(!expected)) {}
+		: file(file), line(line), message(detail::makeMessage(expression, expected)) {}
 
 	Failure() {}
 	std::string file;
@@ -322,12 +346,8 @@ public:
 		return executed_ && failures_.empty();
 	}
 
-	void setFailure(const std::string& file, int line, const std::string& expected, const std::string& result) {
-		failures_.push_back(Failure(file, line, expected, result));
-	}
-
-	void setFailure(const std::string& file, int line, const std::string& expression, bool expected) {
-		failures_.push_back(Failure(file, line, expression, expected));
+	void setFailure(const Failure& failure) {
+		failures_.push_back(failure);
 	}
 
 	void reportFailure(std::ostream& os) const {
@@ -440,6 +460,10 @@ public:
 	}
 
 private:
+	Registry(){}
+
+	PICOTEST_DISALLOW_COPY_AND_ASSIGN(Registry);
+
 	std::vector<TestCase>::iterator find_by_name(const std::string& test_case_name) {
 		for (std::vector<TestCase>::iterator it = tests_.begin(), end = tests_.end(); it != end; ++it)
 			if ((*it).name() == test_case_name) return it;
@@ -448,7 +472,6 @@ private:
 	}
 
 	std::vector<TestCase> tests_;
-
 };
 
 struct Registrar {
@@ -457,16 +480,17 @@ struct Registrar {
 	}
 };
 
+} // namespace picotest::framework
 
 template<typename T1, typename T2, typename OP>
 bool compare(const T1& expected, const T2& actual, OP op, const char* expected_str, const char* actual_str, const char* file, int line) {
 	bool test_success = op(expected, actual);
 
 	if (!test_success) {
-		Test* current = TestState::getCurrentTest();
-		current->setFailure(file, line,
+		framework::TestState::getCurrentTest()->setFailure(
+			framework::Failure(file, line,
 			makeExpressionStr(expected_str, actual_str, op),
-			makeExpressionStr(expected, actual, op));		
+			makeExpressionStr(expected, actual, op)));		
 	}
 	return test_success;
 }
@@ -475,10 +499,7 @@ inline bool evaluate(bool expected, bool actual, const char* expression, const c
 	bool test_success = expected == actual;
 
 	if (!test_success) {
-		Test* current = TestState::getCurrentTest();
-		current->setFailure(file, line,
-			expression,
-			expected);	
+		framework::TestState::getCurrentTest()->setFailure(framework::Failure(file, line, expression, expected));	
 	}
 
 	return test_success;
@@ -486,6 +507,7 @@ inline bool evaluate(bool expected, bool actual, const char* expression, const c
 
 } // namespace picotest
 
+// using namespace testing for compatibility with google test
 namespace testing {
 
 class Test {
@@ -507,20 +529,12 @@ protected:
 
 
 /////////////////////////////////////////////////////////////////
-// helper macros
-
-#define PICOTEST_JOIN(X, Y)       PICOTEST_DO_JOIN( X, Y )
-#define PICOTEST_DO_JOIN( X, Y )  PICOTEST_DO_JOIN2(X,Y)
-#define PICOTEST_DO_JOIN2( X, Y ) X##Y
-#define PICOTEST_STR(X) #X
+// test with auto-registration
 
 #define PICOTEST_IDENITY(test_case_name, test_name) PICOTEST_JOIN(test_case_name, test_name)
 #define PICOTEST_TEST_CASE_INVOKER(test_case_name, test_name) PICOTEST_JOIN(PICOTEST_IDENITY(test_case_name, test_name), _invoker)
-#define PICOTEST_TEST_CASE_REGISTRAR(test_case_name, test_name) static picotest::Registrar PICOTEST_JOIN(PICOTEST_IDENITY(test_case_name, test_name), _registrar)
-#define PICOTEST_MAKE_TEST(test_case_name, test_name) picotest::Test(PICOTEST_STR(test_name), PICOTEST_TEST_CASE_INVOKER(test_case_name, test_name))
-
-/////////////////////////////////////////////////////////////////
-// test with auto-registration
+#define PICOTEST_TEST_CASE_REGISTRAR(test_case_name, test_name) static picotest::framework::Registrar PICOTEST_JOIN(PICOTEST_IDENITY(test_case_name, test_name), _registrar)
+#define PICOTEST_MAKE_TEST(test_case_name, test_name) picotest::framework::Test(PICOTEST_STR(test_name), PICOTEST_TEST_CASE_INVOKER(test_case_name, test_name))
 
 #define TEST(test_case_name, test_name) \
 PICOTEST_TEST_CASE_AUTO_REGISTER(test_case_name, test_name, ::testing::Test)
@@ -552,8 +566,8 @@ void PICOTEST_IDENITY(test_case_name, test_name)::test_method()
 
 #define EXPECT_BOOL(expected, expression) \
 	picotest::evaluate(expected, expression, #expression, __FILE__, __LINE__)
-#define EXPECT_BINARY(left, right, OP) \
-	picotest::compare(left, right, PICOTEST_JOIN(picotest::detail::, OP()), #left, #right, __FILE__, __LINE__)
+#define EXPECT_BINARY(lhs, rhs, OP) \
+	picotest::compare(lhs, rhs, PICOTEST_JOIN(picotest::detail::, OP()), #lhs, #rhs, __FILE__, __LINE__)
 
 #define EXPECT_TRUE(cond) EXPECT_BOOL(true, cond)
 #define EXPECT_FALSE(cond) EXPECT_BOOL(false, cond)
@@ -582,9 +596,9 @@ do {\
 	}\
 } while(0)
 
-#define ASSERT_BINARY(left, right, OP) \
+#define ASSERT_BINARY(lhs, rhs, OP) \
 do {\
-	if (!EXPECT_BINARY(left, right, OP)){\
+	if (!EXPECT_BINARY(lhs, rhs, OP)){\
 		return;\
 	}\
 } while(0)
@@ -610,6 +624,6 @@ do {\
 // RUNNING ALL TESTS
 
 #define RUN_ALL_TESTS() \
-picotest::Registry::getInstance().testRun(); \
-picotest::Registry::getInstance().report(std::cout); \
-picotest::Registry::getInstance().fail();
+picotest::framework::Registry::getInstance().testRun(); \
+picotest::framework::Registry::getInstance().report(std::cout); \
+picotest::framework::Registry::getInstance().fail();
