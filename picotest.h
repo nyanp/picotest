@@ -78,6 +78,14 @@ namespace detail {
 		default:           assert(0); return 0;
 		}
 	}
+#else
+	inline const char* getColorEscape(Color c) {
+		switch (c) {
+		case COLOR_RED:    return "\x1b[41m";
+		case COLOR_GREEN:  return "\x1b[32m";
+		default:           assert(0); return "";
+		}
+	}
 #endif
 
 	inline void coloredPrint(Color c, const char* fmt, ...) {
@@ -100,7 +108,9 @@ namespace detail {
 		fflush(stdout);
 		::SetConsoleTextAttribute(std_handle, old_color);
 #else
+		printf("%s", getColorEscape(c));
 		vprintf(fmt, args);
+		printf("\033[m");
 #endif
 		va_end(args);
 	}
