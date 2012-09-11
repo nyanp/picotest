@@ -28,6 +28,7 @@
 
 #include <vector>
 #include <iostream>
+#include <iomanip>
 #include <string>
 #include <map>
 #include <sstream>
@@ -107,11 +108,37 @@ namespace detail {
 
 	/***** stringize *****/
 
+	inline std::string toString(const void* addr, size_t size) {
+		const unsigned char *p = reinterpret_cast<const unsigned char*>(addr);
+		std::ostringstream os;
+		size_t maxsize = size > 10 ? 10 : size;
+
+		os << "[";
+		for (int i = 0; i < maxsize; i++, p++)
+			os << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(*p) << ((i == size - 1) ? "" : " ");
+		if (maxsize > size)
+			os << "...";
+		os << "]";
+
+		return os.str();
+	}
+
+	template<typename T>
+	std::string toString(const T& v) {
+		std::ostringstream os;
+		os << v;
+		return os.str();
+	}
+
+	inline std::string toString(bool b) {
+		return b ? "true" : "false";
+	}
+
 	// fallback operator <<
 	template <typename Char, typename CharTraits, typename T>
 	::std::basic_ostream<Char, CharTraits>& operator<<(
 		::std::basic_ostream<Char, CharTraits>& os, const T& v) {
-			os << "(" << sizeof(v) << "-byte object)";
+			os << "(" << sizeof(v) << "-byte object)" << toString(reinterpret_cast<const void*>(&v), sizeof(v));
 			return os;
 	}
 
@@ -121,18 +148,6 @@ namespace detail {
 		::std::basic_ostream<Char, CharTraits>& os, const bool& b) {
 			os << b ? "true" : "false";
 			return os;
-	}
-
-	template<typename T>
-	std::string toString(const T& v) {
-		std::ostringstream os;
-		using namespace ::picotest::detail;
-		os << v;
-		return os.str();
-	}
-
-	inline std::string toString(bool b) {
-		return b ? "true" : "false";
 	}
 
 	template<typename T1, typename T2, typename OP>
