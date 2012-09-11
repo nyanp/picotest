@@ -27,10 +27,9 @@
 #pragma once
 
 #include <vector>
-#include <iostream>
+#include <iosfwd>
 #include <iomanip>
 #include <string>
-#include <map>
 #include <sstream>
 #include <algorithm>
 
@@ -108,10 +107,10 @@ namespace detail {
 
 	/***** stringize *****/
 
-	inline std::string toString(const void* addr, size_t size) {
+	inline std::string toString(const void* addr, int size) {
 		const unsigned char *p = reinterpret_cast<const unsigned char*>(addr);
 		std::ostringstream os;
-		size_t maxsize = size > 10 ? 10 : size;
+		int maxsize = size > 10 ? 10 : size;
 
 		os << "[";
 		for (int i = 0; i < maxsize; i++, p++)
@@ -297,12 +296,15 @@ public:
 		failures_.push_back(failure);
 	}
 
-	void reportFailure(std::ostream& os) const {
+	template<typename Char, typename CharTraits>
+	void reportFailure(std::basic_ostream<Char, CharTraits>& os) const {
 		for (Failures::const_iterator it = failures_.begin(), end = failures_.end(); it != end; ++it) 
 			report(os, (*it));
 	}
+
 private:
-	void report(std::ostream& os, const Failure& f) const {
+	template<typename Char, typename CharTraits>
+	void report(std::basic_ostream<Char, CharTraits>& os, const Failure& f) const {
 		os << name_ << " : " << f.file << "(" << f.line << "): " << f.message << std::endl;
 	}
 
@@ -331,7 +333,8 @@ public:
 		executed_ = true;
 	}
 
-	void report(std::ostream& os) const {
+	template<typename Char, typename CharTraits>
+	void report(std::basic_ostream<Char, CharTraits>& os) const {
 		coloredPrint(detail::COLOR_RED, "[ FAILED ] ");
 		os << name_ << std::endl;
 
@@ -384,7 +387,8 @@ public:
 		std::for_each(tests_.begin(), tests_.end(), std::mem_fun_ref(&TestCase::execute));
 	}
 
-	void report(std::ostream& os) const {
+	template<typename Char, typename CharTraits>
+	void report(std::basic_ostream<Char, CharTraits>& os) const {
 		int failed = numFailed();
 
 		if (failed) {
