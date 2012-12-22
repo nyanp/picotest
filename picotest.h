@@ -27,7 +27,8 @@
 #pragma once
 
 #include <vector>
-#include <iosfwd>
+#include <iostream>
+#include <functional>
 #include <iomanip>
 #include <string>
 #include <sstream>
