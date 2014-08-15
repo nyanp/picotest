@@ -1,7 +1,7 @@
-picotest : a single-header C++ testing framework compatible with googletest
+picotest : subset of googletest, single-header simple framework
 ========
 
-picotest is a single header unit testing framework. 
+picotest is a single header unit testing framework.
 
 it has...
 -----
@@ -104,6 +104,6 @@ TEST_F(FooTest, DoesXyz) {
 }  // namespace
 
 int main(int argc, char **argv) {
-  return RUN_ALL_TESTS();
+  RUN_ALL_TESTS();
 }
 ```
