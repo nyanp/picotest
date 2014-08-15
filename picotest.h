@@ -34,18 +34,28 @@
 #include <sstream>
 #include <algorithm>
 
+#include <limits.h>
 #include <cstdio>
 #include <cassert>
-#include <stdint.h>
 #include <cstdarg>
 #include <cstring>
 
 #if defined _WIN32 
 #define PICOTEST_WINDOWS
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif // ifdef NOMINMAX
 #include <Windows.h>
 #elif defined __linux__
 #define PICOTEST_LINUX
+#endif
+
+#if UINT_MAX == 0xffffffff
+typedef unsigned int uint32_t;
+#elif (USHRT_MAX == 0xffffffff)
+typedef unsigned short uint32_t;
+#else
+#error no appropriate typedef found for uint32_t
 #endif
 
 
