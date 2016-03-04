@@ -34,9 +34,9 @@
 #include <sstream>
 #include <algorithm>
 
-#include <limits.h>
 #include <cstdio>
 #include <cassert>
+#include <cstdint>
 #include <cstdarg>
 #include <cstring>
 
@@ -50,13 +50,6 @@
 #define PICOTEST_LINUX
 #endif
 
-#if UINT_MAX == 0xffffffff
-typedef unsigned int uint32_t;
-#elif (USHRT_MAX == 0xffffffff)
-typedef unsigned short uint32_t;
-#else
-#error no appropriate typedef found for uint32_t
-#endif
 
 
 /////////////////////////////////////////////////////////////////
@@ -189,7 +182,7 @@ namespace detail {
     /***** comparing floating point numbers using ULP *****/
 
     struct Floating {
-        static const size_t MIN_UPS = 4;
+        static const std::size_t MIN_UPS = 4;
 
         union float_ {
             float value;
@@ -411,7 +404,7 @@ public:
 
     template<typename Char, typename CharTraits>
     void report(std::basic_ostream<Char, CharTraits>& os) const {
-        int failed = numFailed();
+        std::size_t failed = numFailed();
 
         if (failed) {
             os << numFailed() << " of " << numTotal() << " tests failed." << std::endl;
@@ -427,15 +420,15 @@ public:
         return numTotal() > 0 && numFailed() > 0;
     }
 
-    int numFailed() const {
+    std::size_t numFailed() const {
         return numTotal() - numSuccess();
     }
 
-    int numSuccess() const {
+    std::size_t numSuccess() const {
         return std::count_if(tests_.begin(), tests_.end(), std::mem_fun_ref(&TestCase::success));
     }
 
-    int numTotal() const {
+    std::size_t numTotal() const {
         return tests_.size();
     }
 
@@ -721,7 +714,9 @@ do {\
 /////////////////////////////////////////////////////////////////
 // RUNNING ALL TESTS
 
-#define RUN_ALL_TESTS() \
-picotest::framework::Registry::getInstance().testRun(); \
-picotest::framework::Registry::getInstance().report(std::cout); \
-picotest::framework::Registry::getInstance().fail();
+inline int RUN_ALL_TESTS() {
+    picotest::framework::Registry::getInstance().testRun();
+    picotest::framework::Registry::getInstance().report(std::cout); 
+    return picotest::framework::Registry::getInstance().fail() ? 1 : 0;
+}
+
