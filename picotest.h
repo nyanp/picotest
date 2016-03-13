@@ -244,8 +244,13 @@ namespace framework {
 class  TestCase;
 class  Test;
 
+enum TestReportMode {
+    TestReportOnlyFailure,
+    TestReportForEach
+};
+
 struct TestState {
-    TestState() : testcase_(0), test_(0) {}
+    TestState() : testcase_(0), test_(0), reportmode_(TestReportForEach) {}
 
     static TestState& getInstance() {
         static TestState instance;
@@ -267,11 +272,21 @@ struct TestState {
     static void setCurrentTest(Test* test) {
         getInstance().test_ = test;
     }
+
+    static TestReportMode getReportMode() {
+        return getInstance().reportmode_;
+    }
+
+    static void setReportMode(TestReportMode mode) {
+        getInstance().reportmode_ = mode;
+    }
+
 private:
     PICOTEST_DISALLOW_COPY_AND_ASSIGN(TestState);
 
     TestCase* testcase_;
     Test* test_;
+    TestReportMode reportmode_;
 };
 
 struct Failure {
@@ -341,21 +356,31 @@ public:
         tests_.push_back(t);
     }
 
-    void execute() {
+    template<typename Char, typename CharTraits>
+    void execute(std::basic_ostream<Char, CharTraits>& os) {
         TestState::setCurrentTestCase(this);
-        
+     
         std::for_each(tests_.begin(), tests_.end(), std::mem_fun_ref(&Test::execute));
 
         executed_ = true;
+
+        if (TestState::getReportMode() == TestReportForEach)
+            report(os);
     }
 
     template<typename Char, typename CharTraits>
     void report(std::basic_ostream<Char, CharTraits>& os) const {
-        coloredPrint(detail::COLOR_RED, "[ FAILED ] ");
-        os << name_ << std::endl;
+        os << name_ << ":";
+
+        if (success())
+            coloredPrint(detail::COLOR_GREEN, "[ PASSED ] ");
+        else
+            coloredPrint(detail::COLOR_RED, "[ FAILED ] ");
 
         for (Tests::const_iterator it = tests_.begin(), end = tests_.end(); it != end; ++it)
             if (!(*it).success()) (*it).reportFailure(os);
+
+        os << std::endl;
     }
 
     bool success() const {
@@ -399,8 +424,10 @@ public:
         (*found).add(t);
     }
 
-    void testRun() {
-        std::for_each(tests_.begin(), tests_.end(), std::mem_fun_ref(&TestCase::execute));
+    template<typename Char, typename CharTraits>
+    void testRun(std::basic_ostream<Char, CharTraits>& os) {
+        for (TestCases::iterator it = tests_.begin(); it != tests_.end(); ++it)
+            it->execute(os);
     }
 
     template<typename Char, typename CharTraits>
@@ -716,7 +743,7 @@ do {\
 // RUNNING ALL TESTS
 
 inline int RUN_ALL_TESTS() {
-    picotest::framework::Registry::getInstance().testRun();
+    picotest::framework::Registry::getInstance().testRun(std::cout);
     picotest::framework::Registry::getInstance().report(std::cout); 
     return picotest::framework::Registry::getInstance().fail() ? 1 : 0;
 }
