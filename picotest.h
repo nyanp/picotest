@@ -161,7 +161,7 @@ namespace detail {
     template <typename Char, typename CharTraits>
     ::std::basic_ostream<Char, CharTraits>& operator<<(
         ::std::basic_ostream<Char, CharTraits>& os, const bool& b) {
-            os << b ? "true" : "false";
+            os << (b ? "true" : "false");
             return os;
     }
 
