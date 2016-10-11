@@ -440,7 +440,7 @@ public:
             for (TestCases::const_iterator it = tests_.begin(), end = tests_.end(); it != end; ++it)
                 if (!(*it).success()) (*it).report(os);
         } else {
-            os << numSuccess() << "tests success." << std::endl;
+            os << numSuccess() << " tests success." << std::endl;
         }
     }
 
