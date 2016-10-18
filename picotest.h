@@ -138,17 +138,6 @@ namespace detail {
         return os.str();
     }
 
-    template<typename T>
-    std::string toString(const T& v) {
-        std::ostringstream os;
-        os << v;
-        return os.str();
-    }
-
-    inline std::string toString(bool b) {
-        return b ? "true" : "false";
-    }
-
     // fallback operator <<
     template <typename Char, typename CharTraits, typename T>
     ::std::basic_ostream<Char, CharTraits>& operator<<(
@@ -163,6 +152,26 @@ namespace detail {
         ::std::basic_ostream<Char, CharTraits>& os, const bool& b) {
             os << (b ? "true" : "false");
             return os;
+    }
+
+    template<typename T>
+    std::string toString(const T& v) {
+        std::ostringstream os;
+        os << v;
+        return os.str();
+    }
+
+    inline std::string toString(bool b) {
+        return b ? "true" : "false";
+    }
+
+    template<typename T, typename A>
+    std::string toString(const std::vector<T,A>& v) {
+        std::ostringstream os;
+        os << "{";
+        for (size_t i = 0; i < v.size(); i++)
+            os << v[i] << (i == v.size() - 1 ? "}" : ",");
+        return os.str();
     }
 
     template<typename T1, typename T2, typename OP>
